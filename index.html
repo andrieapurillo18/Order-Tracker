@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Munchies— Quick Order Tracker</title>
+<style>
+  :root{
+  --bg:#f8f5f0;            /* soft off-white background */
+  --card:#ffffff;           /* white cards */
+  --muted:#5c5045;          /* muted warm-brown text */
+  --accent:#6b3e26;         /* chocolate brown accent color */
+  --glass: rgba(0,0,0,0.03);
+  --success:#2e8b57;        /* green for prepared/delivered */
+  --danger:#b33a3a;         /* red for delete warnings */
+  --surface:#ffffff;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+  *{box-sizing:border-box}
+  body{
+  margin:0;
+  min-height:100vh;
+  background: var(--bg);
+  color:#2b2b2b; /* darker readable text */
+  -webkit-font-smoothing:antialiased;
+  padding:18px;
+}
+
+  .app{
+    max-width:980px; margin:0 auto;
+  }
+
+  header{
+    display:flex; gap:12px; align-items:center; margin-bottom:18px;
+  }
+  .logo{
+  width:54px; height:54px; border-radius:12px;
+  overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,0.4);
+  background: var(--accent); /* optional: chocolate brown background */
+}
+.logo img{
+  width:100%; height:100%; object-fit:cover;
+  border-radius:12px;
+}
+  h1{font-size:20px;margin:0}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+
+  .layout{display:grid;grid-template-columns: 1fr 420px; gap:18px;}
+  @media (max-width:980px){ .layout{grid-template-columns:1fr} }
+
+  .card{
+  background:#ffffff;
+  border-radius:12px;
+  padding:14px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.08);
+  border:1px solid rgba(0,0,0,0.05);
+}
+
+  form .row{display:flex; gap:8px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  input[type="text"], input[type="number"], select, input[type="datetime-local"]{
+    width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.04);
+    background:var(--glass); color:inherit; outline:none; font-size:14px;
+  }
+  .small{font-size:13px;color:var(--muted)}
+  .section-title{font-weight:600;margin-top:8px;margin-bottom:8px}
+  .inline{display:flex;gap:8px;align-items:center}
+  .btn{
+    padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#081221;font-weight:600;cursor:pointer;
+    box-shadow:0 6px 14px rgba(255,123,84,0.12);
+  }
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,123,84,0.12)}
+  .muted{color:var(--muted)}
+  .orders-list{max-height:70vh;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:12px}
+  .order{
+    background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+    border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,0.03);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .order-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .order-meta{font-size:13px;color:var(--muted)}
+  .items{display:flex;flex-direction:column;gap:6px}
+  .item{display:flex;justify-content:space-between;gap:12px;align-items:center}
+  .price{font-weight:700}
+  .order-actions{display:flex;gap:8px;align-items:center}
+  .check-row{display:flex;gap:8px;align-items:center}
+  .pill{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-size:13px}
+  .danger{background:linear-gradient(90deg,#ff7b54,#ff6b6b);color:#081221}
+  small.note{color:var(--muted)}
+  footer.app-foot{margin-top:14px; text-align:center; color:var(--muted); font-size:13px}
+  .totals{display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px dashed rgba(255,255,255,0.02)}
+  .empty{color:var(--muted);padding:30px;text-align:center}
+  .control-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  @media (max-width:420px){ .control-grid{grid-template-columns:1fr} }
+  .price-tag{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-weight:700}
+  .small-muted{font-size:12px;color:var(--muted)}
+</style>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(() => console.log('✅ Service Worker registered'))
+        .catch(err => console.log('Service Worker failed:', err));
+    });
+  }
+</script>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+  <img src="icons/icon-192.png" alt="The Munchies logo" onerror="this.style.display='none';this.parentElement.textContent='TM';">
+</div>
+    <div>
+      <h1>The Munchies — Quick Order Tracker</h1>
+      <p class="lead">Add customer orders, save to local storage, mark Prepared & Delivered, then clear only when both checked.</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Left: Order Form -->
+    <div class="card" id="formCard">
+      <form id="orderForm">
+        <div style="display:flex;gap:8px;align-items:start;">
+          <div style="flex:1">
+            <label>Customer name</label>
+            <input type="text" id="custName" placeholder="e.g. Maria Gomez" required>
+          </div>
+          <div style="width:220px">
+            <label>Date & Time</label>
+            <input type="datetime-local" id="orderDate" required>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0">
+
+        <!-- Cookies -->
+        <div>
+          <div class="section-title">Cookies</div>
+          <div class="inline" style="gap:12px;align-items:center">
+            <label style="min-width:110px"><input type="checkbox" id="useCookies"> Include cookies</label>
+            <div style="flex:1">
+              <label>Mode</label>
+              <select id="cookieMode" disabled>
+                <option value="per_piece">Per piece</option>
+                <option value="box">Box of 6</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="cookiePerPiece" style="margin-top:8px;display:none">
+            <div class="row">
+              <div style="flex:1">
+                <label>Flavor</label>
+                <select id="cookieFlavor">
+                  <option value="classic">Classic (₱20)</option>
+                  <option value="redvelvet">Red Velvet (₱23)</option>
+                  <option value="nutella">Nutella (₱23)</option>
+                  <option value="biscoff">Biscoff (₱23)</option>
+                </select>
+              </div>
+              <div style="width:140px">
+                <label>Quantity (pcs)</label>
+                <input type="number" id="cookieQty" min="1" value="1">
+              </div>
+            </div>
+          </div>
+
+          <div id="cookieBox" style="margin-top:8px;display:none">
+            <div class="row">
+              <div style="flex:1">
+                <label>Box Variant</label>
+                <select id="cookieBoxVariant">
+                  <option value="mixed">6 pcs Mixed (₱125/box)</option>
+                  <option value="classic">6 pcs Classic (₱120/box)</option>
+                  <option value="redvelvet">6 pcs Red Velvet (₱138/box)</option>
+                  <option value="nutella">6 pcs Nutella (₱138/box)</option>
+                  <option value="biscoff">6 pcs Biscoff (₱138/box)</option>
+                </select>
+              </div>
+              <div style="width:140px">
+                <label>Boxes (qty)</label>
+                <input type="number" id="cookieBoxQty" min="1" value="1">
+              </div>
+            </div>
+            <small class="small-muted">Each box contains 6 pcs</small>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0">
+
+        <!-- Basque Cheesecake -->
+        <div>
+          <div class="section-title">Basque Cheesecake</div>
+          <div class="inline" style="gap:12px;align-items:center">
+            <label style="min-width:110px"><input type="checkbox" id="useBasque"> Include Basque</label>
+            <div style="flex:1">
+              <label>Size</label>
+              <select id="basqueSize" disabled>
+                <option value="bento">Bento (standard)</option>
+                <option value="custom">Custom size (enter price)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="basqueBento" style="margin-top:8px;display:none">
+            <div class="row control-grid">
+              <div>
+                <label>Flavor</label>
+                <select id="basqueFlavor">
+                  <option value="plain">Plain (₱235 for bento)</option>
+                  <option value="blueberry">Blueberry (₱235)</option>
+                  <option value="mango">Mango (₱235)</option>
+                  <option value="nutella">Nutella (₱255)</option>
+                  <option value="biscoff">Biscoff (₱255)</option>
+                </select>
+              </div>
+              <div>
+                <label>Quantity (bento pcs)</label>
+                <input type="number" id="basqueQty" min="1" value="1">
+              </div>
+            </div>
+          </div>
+
+          <div id="basqueCustom" style="margin-top:8px;display:none">
+            <div class="row control-grid">
+              <div>
+                <label>Custom size name</label>
+                <input type="text" id="basqueCustomName" placeholder="e.g. 8-inch">
+              </div>
+              <div>
+                <label>Price for this custom size (₱)</label>
+                <input type="number" id="basqueCustomPrice" min="0" step="0.01" value="300">
+              </div>
+              <div style="grid-column:1 / -1">
+                <label>Flavor</label>
+                <select id="basqueCustomFlavor">
+                  <option value="plain">Plain</option>
+                  <option value="blueberry">Blueberry</option>
+                  <option value="mango">Mango</option>
+                  <option value="nutella">Nutella</option>
+                  <option value="biscoff">Biscoff</option>
+                </select>
+              </div>
+              <div>
+                <label>Quantity</label>
+                <input type="number" id="basqueCustomQty" min="1" value="1">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0">
+
+        <!-- Milky Donut Rolls -->
+        <div>
+          <div class="section-title">Milky Donut Rolls</div>
+          <div class="inline" style="gap:12px;align-items:center">
+            <label style="min-width:110px"><input type="checkbox" id="useDonuts"> Include milky donuts</label>
+            <div style="flex:1">
+              <label>Flavor</label>
+              <select id="donutFlavor" disabled>
+                <option value="cheese">Cheese (₱10/pc)</option>
+                <option value="chocolate">Chocolate (₱10/pc)</option>
+              </select>
+            </div>
+            <div style="width:120px">
+              <label>Qty</label>
+              <input type="number" id="donutQty" min="1" value="1" disabled>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.02);margin:12px 0">
+
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="small-muted">Order subtotal:</div>
+            <div class="price-tag" id="liveSubtotal">₱0.00</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn ghost" id="resetPricesBtn" title="Reset custom prices to defaults">Reset custom price</button>
+            <button type="submit" class="btn" id="addOrderBtn">Add Order</button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Right: Orders list -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700">Orders</div>
+          <div class="small-muted">Saved locally on this device</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small-muted">Orders saved: <span id="ordersCount">0</span></div>
+          <div style="font-weight:700" id="grandTotal">Total ₱0.00</div>
+        </div>
+      </div>
+
+      <div class="orders-list" id="ordersList">
+        <div class="empty" id="emptyMessage">No orders yet — add one on the left.</div>
+      </div>
+
+      <footer class="app-foot">
+        Tip: To clear an order you must first mark both <strong>Prepared</strong> and <strong>Delivered</strong> — this enables the Clear button.
+      </footer>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Prices (as specified)
+   ========================= */
+const PRICES = {
+  donut: {
+    cheese: 10,
+    chocolate: 10
+  },
+  cookies_per_piece: {
+    classic: 20,
+    redvelvet: 23,
+    nutella: 23,
+    biscoff: 23
+  },
+  cookies_box: {
+    mixed: 125,
+    classic: 120,
+    redvelvet: 138,
+    nutella: 138,
+    biscoff: 138
+  },
+  basque_bento: {
+    plain: 235,
+    blueberry: 235,
+    mango: 235,
+    nutella: 255,
+    biscoff: 255
+  }
+};
+
+/* persistent key */
+const STORAGE_KEY = 'bakeorder_orders_v1';
+
+/* ---------- helpers ---------- */
+const $ = (id)=>document.getElementById(id);
+const currency = (n)=> '₱' + Number(n||0).toFixed(2);
+
+/* ---------- form elements ---------- */
+const useCookies = $('useCookies');
+const cookieMode = $('cookieMode');
+const cookiePerPiece = $('cookiePerPiece');
+const cookieBox = $('cookieBox');
+const cookieFlavor = $('cookieFlavor');
+const cookieQty = $('cookieQty');
+const cookieBoxVariant = $('cookieBoxVariant');
+const cookieBoxQty = $('cookieBoxQty');
+
+const useBasque = $('useBasque');
+const basqueSize = $('basqueSize');
+const basqueBento = $('basqueBento');
+const basqueCustom = $('basqueCustom');
+const basqueFlavor = $('basqueFlavor');
+const basqueQty = $('basqueQty');
+const basqueCustomName = $('basqueCustomName');
+const basqueCustomPrice = $('basqueCustomPrice');
+const basqueCustomFlavor = $('basqueCustomFlavor');
+const basqueCustomQty = $('basqueCustomQty');
+
+const useDonuts = $('useDonuts');
+const donutFlavor = $('donutFlavor');
+const donutQty = $('donutQty');
+
+const custName = $('custName');
+const orderDate = $('orderDate');
+const liveSubtotal = $('liveSubtotal');
+
+const resetPricesBtn = $('resetPricesBtn');
+
+/* orders list */
+const ordersList = $('ordersList');
+const ordersCount = $('ordersCount');
+const grandTotalEl = $('grandTotal');
+const emptyMessage = $('emptyMessage');
+
+/* set default date/time to now */
+(function setDefaultDate(){
+  const now = new Date();
+  // local datetime-local value
+  const tzOffset = now.getTimezoneOffset() * 60000;
+  const localISOTime = (new Date(now - tzOffset)).toISOString().slice(0,16);
+  orderDate.value = localISOTime;
+})();
+
+/* ---------- UI interactions ---------- */
+function updateCookieUI(){
+  cookieMode.disabled = !useCookies.checked;
+  if(!useCookies.checked){
+    cookiePerPiece.style.display = 'none';
+    cookieBox.style.display = 'none';
+  } else {
+    if(cookieMode.value === 'per_piece'){
+      cookiePerPiece.style.display = 'block';
+      cookieBox.style.display = 'none';
+    } else {
+      cookiePerPiece.style.display = 'none';
+      cookieBox.style.display = 'block';
+    }
+  }
+  recalcLiveSubtotal();
+}
+useCookies.addEventListener('change', updateCookieUI);
+cookieMode.addEventListener('change', updateCookieUI);
+cookieFlavor.addEventListener('input', recalcLiveSubtotal);
+cookieQty.addEventListener('input', recalcLiveSubtotal);
+cookieBoxVariant.addEventListener('input', recalcLiveSubtotal);
+cookieBoxQty.addEventListener('input', recalcLiveSubtotal);
+
+/* Basque UI */
+function updateBasqueUI(){
+  basqueSize.disabled = !useBasque.checked;
+  if(!useBasque.checked){
+    basqueBento.style.display='none';
+    basqueCustom.style.display='none';
+  } else {
+    if(basqueSize.value === 'bento'){
+      basqueBento.style.display='block';
+      basqueCustom.style.display='none';
+    } else {
+      basqueBento.style.display='none';
+      basqueCustom.style.display='block';
+    }
+  }
+  recalcLiveSubtotal();
+}
+useBasque.addEventListener('change', updateBasqueUI);
+basqueSize.addEventListener('change', updateBasqueUI);
+basqueFlavor.addEventListener('input', recalcLiveSubtotal);
+basqueQty.addEventListener('input', recalcLiveSubtotal);
+basqueCustomPrice.addEventListener('input', recalcLiveSubtotal);
+basqueCustomQty.addEventListener('input', recalcLiveSubtotal);
+basqueCustomFlavor.addEventListener('input', recalcLiveSubtotal);
+
+/* Donut UI */
+function updateDonutUI(){
+  donutFlavor.disabled = !useDonuts.checked;
+  donutQty.disabled = !useDonuts.checked;
+  recalcLiveSubtotal();
+}
+useDonuts.addEventListener('change', updateDonutUI);
+donutFlavor.addEventListener('input', recalcLiveSubtotal);
+donutQty.addEventListener('input', recalcLiveSubtotal);
+
+/* Reset custom price button (resets custom price to 300 default suggested) */
+resetPricesBtn.addEventListener('click', ()=>{
+  basqueCustomPrice.value = 300;
+  recalcLiveSubtotal();
+});
+
+/* ---------- price calc ---------- */
+function calcCookieSubtotal(){
+  if(!useCookies.checked) return 0;
+  if(cookieMode.value === 'per_piece'){
+    const flavor = cookieFlavor.value;
+    const qty = Number(cookieQty.value) || 0;
+    const price = PRICES.cookies_per_piece[flavor] || 0;
+    return price * qty;
+  } else {
+    const variant = cookieBoxVariant.value;
+    const boxes = Number(cookieBoxQty.value) || 0;
+    const price = PRICES.cookies_box[variant] || 0;
+    return price * boxes;
+  }
+}
+
+function calcBasqueSubtotal(){
+  if(!useBasque.checked) return 0;
+  if(basqueSize.value === 'bento'){
+    const flavor = basqueFlavor.value;
+    const qty = Number(basqueQty.value) || 0;
+    const price = PRICES.basque_bento[flavor] || 0;
+    return price * qty;
+  } else {
+    const price = Number(basqueCustomPrice.value) || 0;
+    const qty = Number(basqueCustomQty.value) || 0;
+    return price * qty;
+  }
+}
+
+function calcDonutSubtotal(){
+  if(!useDonuts.checked) return 0;
+  const flavor = donutFlavor.value;
+  const qty = Number(donutQty.value) || 0;
+  const price = PRICES.donut[flavor] || 0;
+  return price * qty;
+}
+
+function recalcLiveSubtotal(){
+  const subtotal = calcCookieSubtotal() + calcBasqueSubtotal() + calcDonutSubtotal();
+  liveSubtotal.textContent = currency(subtotal);
+}
+
+/* fire initial UI updates */
+updateCookieUI(); updateBasqueUI(); updateDonutUI();
+
+/* ---------- orders persistence ---------- */
+function loadOrders(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return [];
+    return JSON.parse(raw);
+  } catch(e){ console.warn('loadOrders error', e); return [];}
+}
+function saveOrders(list){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+/* ---------- render ---------- */
+function renderOrders(){
+  const orders = loadOrders();
+  ordersList.innerHTML = '';
+  if(orders.length === 0){
+    emptyMessage.style.display = 'block';
+    ordersCount.textContent = '0';
+    grandTotalEl.textContent = 'Total ₱0.00';
+    return;
+  }
+  emptyMessage.style.display = 'none';
+  let grandTotal = 0;
+  orders.forEach((o, idx)=>{
+    grandTotal += Number(o.total || 0);
+    const node = document.createElement('div');
+    node.className = 'order';
+    node.dataset.index = idx;
+
+    const head = document.createElement('div');
+    head.className = 'order-head';
+    head.innerHTML = `
+      <div>
+        <div style="font-weight:700">${escapeHtml(o.name||'—')}</div>
+        <div class="order-meta">${formatDateTime(o.datetime)} · Order ID: ${o.id}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="pill">${currency(o.total)}</div>
+        <div class="small-muted">${o.itemSummary || ''}</div>
+      </div>
+    `;
+    node.appendChild(head);
+
+    // items
+    const items = document.createElement('div');
+    items.className = 'items';
+    o.items.forEach(it=>{
+      const itEl = document.createElement('div');
+      itEl.className = 'item';
+      itEl.innerHTML = `<div>${escapeHtml(it.label)}</div><div class="price">${currency(it.price)}</div>`;
+      items.appendChild(itEl);
+    });
+    node.appendChild(items);
+
+    // prepared/delivered checkboxes & clear button
+    const actionRow = document.createElement('div');
+    actionRow.className = 'order-actions';
+
+    const checks = document.createElement('div');
+    checks.className = 'check-row';
+    checks.innerHTML = `
+      <label><input type="checkbox" class="prepared" ${o.prepared ? 'checked' : ''}> Prepared</label>
+      <label><input type="checkbox" class="delivered" ${o.delivered ? 'checked' : ''}> Delivered</label>
+    `;
+    actionRow.appendChild(checks);
+
+    const btns = document.createElement('div');
+    btns.style.display = 'flex';
+    btns.style.gap='8px';
+    // Clear button disabled until both checkboxes are checked
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'btn ghost';
+    clearBtn.textContent = 'Clear Order';
+    clearBtn.disabled = !(o.prepared && o.delivered);
+    clearBtn.title = 'Requires both Prepared & Delivered to be checked';
+    btns.appendChild(clearBtn);
+
+    // download / duplicate maybe: add simple "Duplicate" to re-add quickly
+    const dupBtn = document.createElement('button');
+    dupBtn.className = 'btn';
+    dupBtn.textContent = 'Duplicate';
+    dupBtn.title = 'Duplicate this order into the form for quick re-order';
+    btns.appendChild(dupBtn);
+
+    actionRow.appendChild(btns);
+    node.appendChild(actionRow);
+
+    // add listeners
+    const preparedCb = checks.querySelector('.prepared');
+    const deliveredCb = checks.querySelector('.delivered');
+    preparedCb.addEventListener('change', ()=>{
+      const list = loadOrders();
+      list[idx].prepared = preparedCb.checked;
+      saveOrders(list);
+      // enable clear only if both checked
+      clearBtn.disabled = !(preparedCb.checked && deliveredCb.checked);
+      renderOrders(); // re-render to reflect counts/totals
+    });
+    deliveredCb.addEventListener('change', ()=>{
+      const list = loadOrders();
+      list[idx].delivered = deliveredCb.checked;
+      saveOrders(list);
+      clearBtn.disabled = !(preparedCb.checked && deliveredCb.checked);
+      renderOrders();
+    });
+
+    // Duplicate -> populate form with this order's data (non-destructive)
+    dupBtn.addEventListener('click', ()=>{
+      populateFormFromOrder(o);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Clear: only allowed when both checked (two-step)
+    clearBtn.addEventListener('click', ()=>{
+      if(!(preparedCb.checked && deliveredCb.checked)){
+        alert('You must check both Prepared and Delivered before clearing this order.');
+        return;
+      }
+      // final confirm (extra safety)
+      if(!confirm('Clear this order? This will permanently remove it from local storage.')) return;
+      const list = loadOrders();
+      list.splice(idx,1);
+      saveOrders(list);
+      renderOrders();
+    });
+
+    ordersList.appendChild(node);
+  });
+
+  ordersCount.textContent = String(orders.length);
+  grandTotalEl.textContent = 'Total ' + currency(grandTotal);
+}
+
+/* ---------- utilities ---------- */
+function formatDateTime(dtStr){
+  try{
+    const d = new Date(dtStr);
+    return d.toLocaleString();
+  } catch(e){ return dtStr; }
+}
+function escapeHtml(str=''){ return String(str).replace(/[&<>"]/g, (s)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
+
+/* ---------- form submission ---------- */
+document.getElementById('orderForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  // build order
+  const order = {
+    id: 'o' + Date.now(),
+    name: custName.value.trim() || '—',
+    datetime: orderDate.value,
+    items: [],
+    total: 0,
+    prepared: false,
+    delivered: false
+  };
+
+  // Cookies
+  if(useCookies.checked){
+    if(cookieMode.value === 'per_piece'){
+      const flavor = cookieFlavor.value;
+      const qty = Number(cookieQty.value) || 0;
+      const unit = PRICES.cookies_per_piece[flavor] || 0;
+      const price = unit * qty;
+      if(qty > 0){
+        order.items.push({
+          label: `Cookies — ${capitalize(flavor)} — ${qty} pc${qty>1?'s':''}`,
+          price
+        });
+      }
+    } else {
+      const variant = cookieBoxVariant.value;
+      const boxes = Number(cookieBoxQty.value) || 0;
+      const unit = PRICES.cookies_box[variant] || 0;
+      const price = unit * boxes;
+      if(boxes > 0){
+        // human-friendly variant name
+        const mapName = {
+          mixed: '6 pcs Mixed',
+          classic: '6 pcs Classic',
+          redvelvet: '6 pcs Red Velvet',
+          nutella: '6 pcs Nutella',
+          biscoff: '6 pcs Biscoff'
+        };
+        order.items.push({
+          label: `Cookies — ${mapName[variant]} — ${boxes} box${boxes>1?'es':''}`,
+          price
+        });
+      }
+    }
+  }
+
+  // Basque Cheesecake
+  if(useBasque.checked){
+    if(basqueSize.value === 'bento'){
+      const flavor = basqueFlavor.value;
+      const qty = Number(basqueQty.value) || 0;
+      const unit = PRICES.basque_bento[flavor] || 0;
+      const price = unit * qty;
+      if(qty > 0){
+        order.items.push({
+          label: `Basque — ${capitalize(flavor)} (Bento) x ${qty}`,
+          price
+        });
+      }
+    } else {
+      const customName = basqueCustomName.value.trim() || 'Custom';
+      const flavor = basqueCustomFlavor.value;
+      const qty = Number(basqueCustomQty.value) || 0;
+      const unit = Number(basqueCustomPrice.value) || 0;
+      const price = unit * qty;
+      if(qty > 0 && unit > 0){
+        order.items.push({
+          label: `Basque — ${capitalize(flavor)} — ${customName} x ${qty}`,
+          price
+        });
+      } else if(qty > 0){
+        alert('Please set a valid custom price for the Basque custom size.');
+        return;
+      }
+    }
+  }
+
+  // Donuts
+  if(useDonuts.checked){
+    const flavor = donutFlavor.value;
+    const qty = Number(donutQty.value) || 0;
+    const unit = PRICES.donut[flavor] || 0;
+    const price = unit * qty;
+    if(qty > 0){
+      order.items.push({
+        label: `Milky Donut Rolls — ${capitalize(flavor)} x ${qty}`,
+        price
+      });
+    }
+  }
+
+  if(order.items.length === 0){
+    alert('Please include at least one product in the order.');
+    return;
+  }
+
+  order.total = order.items.reduce((s,i)=>s + Number(i.price||0), 0);
+  order.itemSummary = order.items.map(it=>it.label).slice(0,2).join(' · ');
+
+  // store
+  const list = loadOrders();
+  list.unshift(order); // newest first
+  saveOrders(list);
+  renderOrders();
+
+  // reset form (but keep custom price)
+  document.getElementById('orderForm').reset();
+  // reset UI activations:
+  updateCookieUI(); updateBasqueUI(); updateDonutUI();
+  // restore default date/time to now
+  (function resetDate(){
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(now - tzOffset)).toISOString().slice(0,16);
+    orderDate.value = localISOTime;
+  })();
+  // keep custom price value as-is (user may want to reuse)
+  // hint - set name empty
+  custName.value = '';
+  recalcLiveSubtotal();
+  alert('Order added!');
+});
+
+/* populate form from existing order (duplicate) */
+function populateFormFromOrder(o){
+  // try to parse items heuristically
+  document.getElementById('orderForm').reset();
+  updateCookieUI(); updateBasqueUI(); updateDonutUI();
+
+  custName.value = o.name || '';
+  // date/time: leave to now for safety or parse existing datetime:
+  try{ orderDate.value = o.datetime }catch(e){}
+
+  // Simple heuristic: check each item label for keywords
+  o.items.forEach(it=>{
+    const lbl = it.label.toLowerCase();
+    if(lbl.includes('cookies')){
+      useCookies.checked = true;
+      cookieMode.disabled = false;
+      if(lbl.includes('6 pcs') || lbl.includes('box')){
+        cookieMode.value = 'box';
+        cookieBox.style.display = 'block';
+        cookiePerPiece.style.display = 'none';
+        // quantity parse number before 'box' or 'box' keyword
+        const m = lbl.match(/x\s*(\d+)/) || lbl.match(/(\d+)\s*box/);
+        const qty = m ? Number(m[1]) : 1;
+        cookieBoxQty.value = qty || 1;
+        // set variant
+        if(lbl.includes('mixed')) cookieBoxVariant.value='mixed';
+        else if(lbl.includes('classic')) cookieBoxVariant.value='classic';
+        else if(lbl.includes('red velvet')) cookieBoxVariant.value='redvelvet';
+        else if(lbl.includes('nutella')) cookieBoxVariant.value='nutella';
+        else if(lbl.includes('biscoff')) cookieBoxVariant.value='biscoff';
+      } else {
+        cookieMode.value = 'per_piece';
+        cookiePerPiece.style.display = 'block';
+        cookieBox.style.display = 'none';
+        const m = lbl.match(/x\s*(\d+)/);
+        const qty = m ? Number(m[1]) : 1;
+        cookieQty.value = qty;
+        if(lbl.includes('classic')) cookieFlavor.value='classic';
+        else if(lbl.includes('red velvet')) cookieFlavor.value='redvelvet';
+        else if(lbl.includes('nutella')) cookieFlavor.value='nutella';
+        else if(lbl.includes('biscoff')) cookieFlavor.value='biscoff';
+      }
+    } else if(lbl.includes('basque')){
+      useBasque.checked = true;
+      basqueSize.disabled = false;
+      if(lbl.includes('bento')){
+        basqueSize.value = 'bento';
+        basqueBento.style.display='block';
+        basqueCustom.style.display='none';
+        const m = lbl.match(/x\s*(\d+)/);
+        basqueQty.value = m ? Number(m[1]) : 1;
+        if(lbl.includes('blueberry')) basqueFlavor.value='blueberry';
+        else if(lbl.includes('mango')) basqueFlavor.value='mango';
+        else if(lbl.includes('nutella')) basqueFlavor.value='nutella';
+        else if(lbl.includes('biscoff')) basqueFlavor.value='biscoff';
+        else basqueFlavor.value='plain';
+      } else {
+        basqueSize.value = 'custom';
+        basqueBento.style.display='none';
+        basqueCustom.style.display='block';
+        const m = lbl.match(/x\s*(\d+)/);
+        basqueCustomQty.value = m ? Number(m[1]) : 1;
+        // attempt to capture custom name:
+        const nameMatch = lbl.match(/—\s*(.+)\s*x\s*\d+/) || lbl.match(/—\s*(.+)$/);
+        if(nameMatch && nameMatch[1]) basqueCustomName.value = nameMatch[1].trim();
+        if(lbl.includes('blueberry')) basqueCustomFlavor.value='blueberry';
+        else if(lbl.includes('mango')) basqueCustomFlavor.value='mango';
+        else if(lbl.includes('nutella')) basqueCustomFlavor.value='nutella';
+        else if(lbl.includes('biscoff')) basqueCustomFlavor.value='biscoff';
+        else basqueCustomFlavor.value='plain';
+      }
+    } else if(lbl.includes('milky donut')){
+      useDonuts.checked = true;
+      donutFlavor.disabled = false;
+      donutQty.disabled = false;
+      if(lbl.includes('cheese')) donutFlavor.value='cheese';
+      else if(lbl.includes('chocolate')) donutFlavor.value='chocolate';
+      const m = lbl.match(/x\s*(\d+)/);
+      donutQty.value = m ? Number(m[1]) : 1;
+    }
+  });
+
+  updateCookieUI(); updateBasqueUI(); updateDonutUI();
+  recalcLiveSubtotal();
+}
+
+/* ---------- utility small helpers ---------- */
+function capitalize(s){ return String(s||'').replace(/(^|\s)\S/g, t=>t.toUpperCase()); }
+
+/* ---------- init ---------- */
+renderOrders();
+
+/* keep subtotal live while typing */
+['input','change'].forEach(evt=>{
+  document.getElementById('orderForm').addEventListener(evt, recalcLiveSubtotal);
+});
+</script>
+</body>
+</html>
