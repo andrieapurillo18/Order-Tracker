@@ -1,40 +1,570 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>The Munchies— Quick Order Tracker</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Munchies - Quick Order Tracker</title>
+<link rel="manifest" href="manifest.json">
 <style>
-  :root{
-  --bg:#f8f5f0;            /* soft off-white background */
-  --card:#ffffff;           /* white cards */
-  --muted:#5c5045;          /* muted warm-brown text */
-  --accent:#6b3e26;         /* chocolate brown accent color */
-  --glass: rgba(0,0,0,0.03);
-  --success:#2e8b57;        /* green for prepared/delivered */
-  --danger:#b33a3a;         /* red for delete warnings */
-  --surface:#ffffff;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+:root{
+  --bg:#f8f5f0;
+  --card:#ffffff;
+  --accent:#6b3e26;
+  --muted:#5c5045;
+  --success:#2e8b57;
+  --danger:#b33a3a;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto;
 }
-  *{box-sizing:border-box}
-  body{
+body{
   margin:0;
   min-height:100vh;
-  background: var(--bg);
-  color:#2b2b2b; /* darker readable text */
-  -webkit-font-smoothing:antialiased;
+  background:var(--bg);
+  color:#2b2b2b;
   padding:18px;
 }
-
-  .app{
-    max-width:980px; margin:0 auto;
-  }
-
-  header{
-    display:flex; gap:12px; align-items:center; margin-bottom:18px;
-  }
-  .logo{
+header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:20px;
+}
+.logo{
   width:54px;
+  height:54px;
+  border-radius:12px;
+  background:#6b3e26;
+  color:#f8f5f0;
+  border:2px solid #f8f5f0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:20px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+h1{font-size:1.2em;color:var(--accent);}
+.card{
+  background:var(--card);
+  border-radius:12px;
+  padding:14px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.08);
+  margin-bottom:18px;
+}
+button{
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  border-radius:8px;
+  padding:8px 12px;
+  cursor:pointer;
+  font-weight:600;
+}
+button:hover{opacity:.9;}
+input,select{
+  padding:6px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+.order-section{
+  display:none;
+  margin-top:10px;
+}
+.order-line{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:6px;
+}
+.subtotal{font-weight:600;color:var(--accent);margin-top:8px;}
+.total{font-weight:700;font-size:1.1em;margin-top:10px;border-top:1px solid #ddd;padding-top:6px;}
+.checkbox-group{margin-top:10px;}
+.order-item{
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:10px;
+  margin-top:12px;
+  background:#fff;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">TM</div>
+  <h1>The Munchies - Quick Order Tracker</h1>
+</header>
+
+<div class="card">
+  <h2>Customer Info</h2>
+  <label>Name: <input id="custName" type="text"></label><br>
+  <label>Date: <input id="custDate" type="date"></label><br>
+  <label>Time: <input id="custTime" type="time"></label>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('cookies')">🍪 Cookies</button>
+  <div id="cookies" class="order-section">
+    <div id="cookieList"></div>
+    <button onclick="addCookie()">+ Add Cookie Order</button>
+    <div class="subtotal" id="cookieTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('cheesecake')">🍰 Basque Cheesecake</button>
+  <div id="cheesecake" class="order-section">
+    <div id="cheeseList"></div>
+    <button onclick="addCheese()">+ Add Cheesecake Order</button>
+    <div class="subtotal" id="cheeseTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('donuts')">🍩 Milky Donut Rolls</button>
+  <div id="donuts" class="order-section">
+    <div id="donutList"></div>
+    <button onclick="addDonut()">+ Add Donut Order</button>
+    <div class="subtotal" id="donutTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="total" id="grandTotal">Grand Total: ₱0</div>
+  <button onclick="saveOrder()">Save Order</button>
+</div>
+
+<div id="ordersContainer"></div>
+
+<script>
+const prices={
+  cookies:{
+    classic:20,redvelvet:23,nutella:23,biscoff:23,
+    box6:{classic:120,redvelvet:138,nutella:138,biscoff:138,mixed:125}
+  },
+  cheesecake:{
+    blueberry:235,mango:235,nutella:255,biscoff:255,plain:200
+  },
+  donuts:{cheese:10,chocolate:10}
+};
+function toggleSection(id){
+  const sec=document.getElementById(id);
+  sec.style.display=sec.style.display==='none'||!sec.style.display?'block':'none';
+}
+
+function addCookie(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="cookieType">
+      <option value="piece">Per Piece</option>
+      <option value="box6">Box of 6</option>
+    </select>
+    <select class="cookieFlavor">
+      <option value="classic">Classic</option>
+      <option value="redvelvet">Red Velvet</option>
+      <option value="nutella">Nutella</option>
+      <option value="biscoff">Biscoff</option>
+      <option value="mixed">Mixed (6 only)</option>
+    </select>
+    <input type="number" min="1" class="cookieQty" placeholder="Qty" value="1">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  document.getElementById('cookieList').appendChild(div);
+}
+
+function addCheese(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="cheeseSize">
+      <option value="bento">Bento</option>
+      <option value="custom">Custom</option>
+    </select>
+    <select class="cheeseFlavor">
+      <option value="plain">Plain</option>
+      <option value="blueberry">Blueberry</option>
+      <option value="mango">Mango</option>
+      <option value="nutella">Nutella</option>
+      <option value="biscoff">Biscoff</option>
+    </select>
+    <input type="number" min="1" class="cheeseQty" placeholder="Qty" value="1">
+    <input type="number" min="0" class="cheeseCustom" placeholder="₱Custom Price" style="display:none;">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  div.querySelector('.cheeseSize').addEventListener('change',e=>{
+    div.querySelector('.cheeseCustom').style.display=e.target.value==='custom'?'inline-block':'none';
+  });
+  document.getElementById('cheeseList').appendChild(div);
+}
+
+function addDonut(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="donutFlavor">
+      <option value="cheese">Cheese</option>
+      <option value="chocolate">Chocolate</option>
+    </select>
+    <input type="number" min="1" class="donutQty" placeholder="Qty" value="1">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  document.getElementById('donutList').appendChild(div);
+}
+
+document.body.addEventListener('input',updateTotals);
+
+function updateTotals(){
+  let cookieSub=0,cheeseSub=0,donutSub=0;
+  document.querySelectorAll('.cookieQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const type=document.querySelectorAll('.cookieType')[i].value;
+    const flavor=document.querySelectorAll('.cookieFlavor')[i].value;
+    if(type==='piece'){cookieSub+=qty*prices.cookies[flavor];}
+    else if(type==='box6'){cookieSub+=qty*prices.cookies.box6[flavor];}
+  });
+  document.querySelectorAll('.cheeseQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const size=document.querySelectorAll('.cheeseSize')[i].value;
+    const flavor=document.querySelectorAll('.cheeseFlavor')[i].value;
+    if(size==='custom'){
+      const custom=document.querySelectorAll('.cheeseCustom')[i].value||0;
+      cheeseSub+=qty*custom;
+    }else{
+      cheeseSub+=qty*prices.cheesecake[flavor];
+    }
+  });
+  document.querySelectorAll('.donutQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const flavor=document.querySelectorAll('.donutFlavor')[i].value;
+    donutSub+=qty*prices.donuts[flavor];
+  });
+  document.getElementById('cookieTotal').innerText=`Cookies Subtotal: ₱${cookieSub}`;
+  document.getElementById('cheeseTotal').innerText=`Cheesecakes Subtotal: ₱${cheeseSub}`;
+  document.getElementById('donutTotal').innerText=`Donuts Subtotal: ₱${donutSub}`;
+  document.getElementById('grandTotal').innerText=`Grand Total: ₱${cookieSub+cheeseSub+donutSub}`;
+}
+
+function saveOrder(){
+  updateTotals();
+  const name=document.getElementById('custName').value.trim();
+  if(!name){alert("Please enter customer name");return;}
+  const date=document.getElementById('custDate').value;
+  const time=document.getElementById('custTime').value;
+  const order={
+    name,date,time,
+    cookies:document.getElementById('cookieList').innerHTML,
+    cheesecakes:document.getElementById('cheeseList').innerHTML,
+    donuts:document.getElementById('donutList').innerHTML,
+    totals:{
+      cookies:document.getElementById('cookieTotal').innerText,
+      cheesecakes:document.getElementById('cheeseTotal').innerText,
+      donuts:document.getElementById('donutTotal').innerText,
+      grand:document.getElementById('grandTotal').innerText
+    },
+    prepared:false,delivered:false
+  };
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data.push(order);
+  localStorage.setItem('orders',JSON.stringify(data));
+  renderOrders();
+  clearInputs();
+}
+function clearInputs(){
+  ['custName','custDate','custTime'].forEach(id=>document.getElementById(id).value='');
+  ['cookieList','cheeseList','donutList'].forEach(id=>document.getElementById(id).innerHTML='');
+  updateTotals();
+}
+function renderOrders(){
+  const cont=document.getElementById('ordersContainer');
+  cont.innerHTML='';
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data.forEach((o,i)=>{
+    const div=document.createElement('div');
+    div.className='order-item';
+    div.innerHTML=`
+      <h3>${o.name}</h3>
+      <p>${o.date} ${o.time}</p>
+      <div><strong>Cookies:</strong><div>${o.cookies}</div><p>${o.totals.cookies}</p></div>
+      <div><strong>Cheesecakes:</strong><div>${o.cheesecakes}</div><p>${o.totals.cheesecakes}</p></div>
+      <div><strong>Donuts:</strong><div>${o.donuts}</div><p>${o.totals.donuts}</p></div>
+      <p>${o.totals.grand}</p>
+      <div class="checkbox-group">
+        <label><input type="checkbox" onchange="toggleStatus(${i},'prepared')" ${o.prepared?'checked':''}> Prepared</label>
+        <label><input type="checkbox" onchange="toggleStatus(${i},'delivered')" ${o.delivered?'checked':''}> Delivered</label>
+        <button onclick="clearOrder(${i})">Clear Order</button>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+}
+function toggleStatus(i,type){
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data[i][type]=!data[i][type];
+  localStorage.setItem('orders',JSON.stringify(data));
+}
+function clearOrder(i){
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  const o=data[i];
+  if(o.prepared&&o.delivered){
+    if(confirm("Clear this order?")){
+      data.splice(i,1);
+      localStorage.setItem('orders',JSON.stringify(data));
+      renderOrders();
+    }
+  }else alert("Check Prepared and Delivered first.");
+}
+renderOrders();
+</script>
+</body>
+</html>  display:none;
+  margin-top:10px;
+}
+.order-line{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:6px;
+}
+.subtotal{font-weight:600;color:var(--accent);margin-top:8px;}
+.total{font-weight:700;font-size:1.1em;margin-top:10px;border-top:1px solid #ddd;padding-top:6px;}
+.checkbox-group{margin-top:10px;}
+.order-item{
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:10px;
+  margin-top:12px;
+  background:#fff;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">TM</div>
+  <h1>The Munchies - Quick Order Tracker</h1>
+</header>
+
+<div class="card">
+  <h2>Customer Info</h2>
+  <label>Name: <input id="custName" type="text"></label><br>
+  <label>Date: <input id="custDate" type="date"></label><br>
+  <label>Time: <input id="custTime" type="time"></label>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('cookies')">🍪 Cookies</button>
+  <div id="cookies" class="order-section">
+    <div id="cookieList"></div>
+    <button onclick="addCookie()">+ Add Cookie Order</button>
+    <div class="subtotal" id="cookieTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('cheesecake')">🍰 Basque Cheesecake</button>
+  <div id="cheesecake" class="order-section">
+    <div id="cheeseList"></div>
+    <button onclick="addCheese()">+ Add Cheesecake Order</button>
+    <div class="subtotal" id="cheeseTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <button onclick="toggleSection('donuts')">🍩 Milky Donut Rolls</button>
+  <div id="donuts" class="order-section">
+    <div id="donutList"></div>
+    <button onclick="addDonut()">+ Add Donut Order</button>
+    <div class="subtotal" id="donutTotal">Subtotal: ₱0</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="total" id="grandTotal">Grand Total: ₱0</div>
+  <button onclick="saveOrder()">Save Order</button>
+</div>
+
+<div id="ordersContainer"></div>
+
+<script>
+const prices={
+  cookies:{
+    classic:20,redvelvet:23,nutella:23,biscoff:23,
+    box6:{classic:120,redvelvet:138,nutella:138,biscoff:138,mixed:125}
+  },
+  cheesecake:{
+    blueberry:235,mango:235,nutella:255,biscoff:255,plain:200
+  },
+  donuts:{cheese:10,chocolate:10}
+};
+function toggleSection(id){
+  const sec=document.getElementById(id);
+  sec.style.display=sec.style.display==='none'||!sec.style.display?'block':'none';
+}
+
+function addCookie(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="cookieType">
+      <option value="piece">Per Piece</option>
+      <option value="box6">Box of 6</option>
+    </select>
+    <select class="cookieFlavor">
+      <option value="classic">Classic</option>
+      <option value="redvelvet">Red Velvet</option>
+      <option value="nutella">Nutella</option>
+      <option value="biscoff">Biscoff</option>
+      <option value="mixed">Mixed (6 only)</option>
+    </select>
+    <input type="number" min="1" class="cookieQty" placeholder="Qty" value="1">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  document.getElementById('cookieList').appendChild(div);
+}
+
+function addCheese(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="cheeseSize">
+      <option value="bento">Bento</option>
+      <option value="custom">Custom</option>
+    </select>
+    <select class="cheeseFlavor">
+      <option value="plain">Plain</option>
+      <option value="blueberry">Blueberry</option>
+      <option value="mango">Mango</option>
+      <option value="nutella">Nutella</option>
+      <option value="biscoff">Biscoff</option>
+    </select>
+    <input type="number" min="1" class="cheeseQty" placeholder="Qty" value="1">
+    <input type="number" min="0" class="cheeseCustom" placeholder="₱Custom Price" style="display:none;">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  div.querySelector('.cheeseSize').addEventListener('change',e=>{
+    div.querySelector('.cheeseCustom').style.display=e.target.value==='custom'?'inline-block':'none';
+  });
+  document.getElementById('cheeseList').appendChild(div);
+}
+
+function addDonut(){
+  const div=document.createElement('div');
+  div.className='order-line';
+  div.innerHTML=`
+    <select class="donutFlavor">
+      <option value="cheese">Cheese</option>
+      <option value="chocolate">Chocolate</option>
+    </select>
+    <input type="number" min="1" class="donutQty" placeholder="Qty" value="1">
+    <button onclick="this.parentElement.remove();updateTotals()">✖</button>
+  `;
+  document.getElementById('donutList').appendChild(div);
+}
+
+document.body.addEventListener('input',updateTotals);
+
+function updateTotals(){
+  let cookieSub=0,cheeseSub=0,donutSub=0;
+  document.querySelectorAll('.cookieQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const type=document.querySelectorAll('.cookieType')[i].value;
+    const flavor=document.querySelectorAll('.cookieFlavor')[i].value;
+    if(type==='piece'){cookieSub+=qty*prices.cookies[flavor];}
+    else if(type==='box6'){cookieSub+=qty*prices.cookies.box6[flavor];}
+  });
+  document.querySelectorAll('.cheeseQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const size=document.querySelectorAll('.cheeseSize')[i].value;
+    const flavor=document.querySelectorAll('.cheeseFlavor')[i].value;
+    if(size==='custom'){
+      const custom=document.querySelectorAll('.cheeseCustom')[i].value||0;
+      cheeseSub+=qty*custom;
+    }else{
+      cheeseSub+=qty*prices.cheesecake[flavor];
+    }
+  });
+  document.querySelectorAll('.donutQty').forEach((q,i)=>{
+    const qty=+q.value||0;
+    const flavor=document.querySelectorAll('.donutFlavor')[i].value;
+    donutSub+=qty*prices.donuts[flavor];
+  });
+  document.getElementById('cookieTotal').innerText=`Cookies Subtotal: ₱${cookieSub}`;
+  document.getElementById('cheeseTotal').innerText=`Cheesecakes Subtotal: ₱${cheeseSub}`;
+  document.getElementById('donutTotal').innerText=`Donuts Subtotal: ₱${donutSub}`;
+  document.getElementById('grandTotal').innerText=`Grand Total: ₱${cookieSub+cheeseSub+donutSub}`;
+}
+
+function saveOrder(){
+  updateTotals();
+  const name=document.getElementById('custName').value.trim();
+  if(!name){alert("Please enter customer name");return;}
+  const date=document.getElementById('custDate').value;
+  const time=document.getElementById('custTime').value;
+  const order={
+    name,date,time,
+    cookies:document.getElementById('cookieList').innerHTML,
+    cheesecakes:document.getElementById('cheeseList').innerHTML,
+    donuts:document.getElementById('donutList').innerHTML,
+    totals:{
+      cookies:document.getElementById('cookieTotal').innerText,
+      cheesecakes:document.getElementById('cheeseTotal').innerText,
+      donuts:document.getElementById('donutTotal').innerText,
+      grand:document.getElementById('grandTotal').innerText
+    },
+    prepared:false,delivered:false
+  };
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data.push(order);
+  localStorage.setItem('orders',JSON.stringify(data));
+  renderOrders();
+  clearInputs();
+}
+function clearInputs(){
+  ['custName','custDate','custTime'].forEach(id=>document.getElementById(id).value='');
+  ['cookieList','cheeseList','donutList'].forEach(id=>document.getElementById(id).innerHTML='');
+  updateTotals();
+}
+function renderOrders(){
+  const cont=document.getElementById('ordersContainer');
+  cont.innerHTML='';
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data.forEach((o,i)=>{
+    const div=document.createElement('div');
+    div.className='order-item';
+    div.innerHTML=`
+      <h3>${o.name}</h3>
+      <p>${o.date} ${o.time}</p>
+      <div><strong>Cookies:</strong><div>${o.cookies}</div><p>${o.totals.cookies}</p></div>
+      <div><strong>Cheesecakes:</strong><div>${o.cheesecakes}</div><p>${o.totals.cheesecakes}</p></div>
+      <div><strong>Donuts:</strong><div>${o.donuts}</div><p>${o.totals.donuts}</p></div>
+      <p>${o.totals.grand}</p>
+      <div class="checkbox-group">
+        <label><input type="checkbox" onchange="toggleStatus(${i},'prepared')" ${o.prepared?'checked':''}> Prepared</label>
+        <label><input type="checkbox" onchange="toggleStatus(${i},'delivered')" ${o.delivered?'checked':''}> Delivered</label>
+        <button onclick="clearOrder(${i})">Clear Order</button>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+}
+function toggleStatus(i,type){
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  data[i][type]=!data[i][type];
+  localStorage.setItem('orders',JSON.stringify(data));
+}
+function clearOrder(i){
+  const data=JSON.parse(localStorage.getItem('orders')||'[]');
+  const o=data[i];
+  if(o.prepared&&o.delivered){
+    if(confirm("Clear this order?")){
+      data.splice(i,1);
+      localStorage.setItem('orders',JSON.stringify(data));
+      renderOrders();
+    }
+  }else alert("Check Prepared and Delivered first.");
+}
+renderOrders();
+</script>
+</body>
+</html>  width:54px;
   height:54px;
   border-radius:12px;
   background:#6b3e26;
@@ -879,3 +1409,4 @@ renderOrders();
 </body>
 
 </html>
+
